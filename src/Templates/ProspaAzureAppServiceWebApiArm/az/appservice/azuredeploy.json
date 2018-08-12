@@ -1,0 +1,318 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appServicePlan": {
+      "type": "object",
+      "defaultValue": {
+        "name": {
+          "type": "string",
+          "metadata": {
+            "description": "The name of the App Service plan. Will be prefixed with the specified environment formated as {name}-{environment}."
+          }
+        },
+        "skuName": {
+          "defaultValue": "S1",
+          "allowedValues": [
+            "F1",
+            "D1",
+            "B1",
+            "B2",
+            "B3",
+            "S1",
+            "S2",
+            "S3",
+            "P1",
+            "P2",
+            "P3",
+            "P1V2",
+            "P1V2",
+            "P3V2",
+            "I1",
+            "I2",
+            "I3"
+          ],
+          "type": "string",
+          "metadata": {
+            "description": "Describes the App Service Plan's pricing tier and instance size/family. See https://azure.microsoft.com/en-us/pricing/details/app-service/ and https://docs.microsoft.com/en-au/azure/azure-subscription-service-limits#app-service-limits for details."
+          }
+        },
+        "skuCapacity": {
+          "defaultValue": 2,
+          "type": "int",
+          "metadata": {
+            "description": "Describes plan's instance count. See https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/azure-stack/azure-stack-app-service-capacity-planning.md for capacity planning."
+          }
+        },
+        "autoScale": {
+          "defaultValue": {
+            "enabled": {
+              "defaultValue": true,
+              "type": "bool",
+              "metadata": {
+                "description": "A boolean to indicate whether the autoscaling is enabled or disabled."
+              }
+            },
+            "cpuPercentThresholdToScaleOut": {
+              "defaultValue": 60,
+              "type": "int",
+              "metadata": {
+                "description": "The CPU Percentage upper threshold. If the CPU Percentage is above this threshold then autoscale engine will initiate scale out action."
+              }
+            },
+            "cpuPercentThresholdToScaleIn": {
+              "defaultValue": 40,
+              "type": "int",
+              "metadata": {
+                "description": "The CPU Percentage lower threshold. If the CPU Percentage is below this threshold then autoscale engine will initiate scale in action."
+              }
+            },
+            "minimumCapacity": {
+              "defaultValue": 2,
+              "type": "int",
+              "metadata": {
+                "description": "The minimum capacity. Autoscale engine will ensure the instance count is at least this value."
+              }
+            },
+            "maximumCapacity": {
+              "defaultValue": 5,
+              "type": "int",
+              "metadata": {
+                "description": "The maximum capacity. Autoscale engine will ensure the instance count is not greater than this value."
+              }
+            },
+            "defaultCapacity": {
+              "defaultValue": 2,
+              "type": "int",
+              "metadata": {
+                "description": "The default capacity. Autoscale engine will preventively set the instance count to be this value if it can not find any metric data."
+              }
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    "alertWebhookUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "The webhook url to send alerts on metric thresholds."
+      }
+    },
+    "cpuThreshold": {
+      "type": "int",
+      "defaultValue": 80
+    },
+    "memoryThreshold": {
+      "type": "int",
+      "defaultValue": 80
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "demo",
+      "allowedValues": [
+        "demo",
+        "staging",
+        "live"
+      ],
+      "metadata": {
+        "description": "The name of the environment deploying to. The App Service Plan's name and Web App's name will be prefixed with this value. Resources will be tagged with this value."
+      }
+    }
+  },
+  "variables": {
+    "appServicePlanName": "[concat(parameters('environment'), '-', toLower(parameters('appServicePlan').name))]",
+    "appServicePlanAutoScaleSettingsName": "[concat(variables('appServicePlanName'), '-autoscale-settings')]",
+    "webAppAlertRulesMemoryThresholdName": "[concat(variables('appServicePlanName'), '-memory-threshold-rule')]",
+    "webAppAlertRulesCpuThresholdName": "[concat(variables('appServicePlanName'), '-cpu-threshold-rule')]",
+    "identityResourceId": "[concat(resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName')), '/providers/Microsoft.ManagedIdentity/Identities/default')]"
+  },
+  "resources": [
+    {
+      "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlanName'))]",
+      "type": "Microsoft.Web/serverfarms",
+      "sku": {
+        "name": "[parameters('appServicePlan').SkuName]",
+        "capacity": "[int(parameters('appServicePlan').SkuCapacity)]"
+      },
+      "kind": "app",
+      "name": "[variables('appServicePlanName')]",
+      "apiVersion": "2016-09-01",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "environment": "[parameters('environment')]"
+      },
+      "scale": null,
+      "properties": {
+        "name": "[variables('appServicePlanName')]",
+        "workerTierName": null,
+        "adminSiteName": null,
+        "hostingEnvironmentProfile": null,
+        "perSiteScaling": false,
+        "reserved": false,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0
+      },
+      "dependsOn": []
+    },
+    {
+      "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId,'/resourcegroups/', resourceGroup().name, '/providers/microsoft.insights/alertrules/', variables('webAppAlertRulesMemoryThresholdName'))]",
+      "type": "Microsoft.Insights/AlertRules",
+      "name": "[variables('webAppAlertRulesMemoryThresholdName')]",
+      "apiVersion": "2014-04-01",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "[concat('hidden-related:', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlanName'))]": "Resource"
+      },
+      "scale": null,
+      "properties": {
+        "name": "[variables('webAppAlertRulesMemoryThresholdName')]",
+        "description": "",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+            "metricNamespace": null,
+            "metricName": "MemoryPercentage"
+          },
+          "operator": "GreaterThan",
+          "threshold": "[parameters('memoryThreshold')]",
+          "windowSize": "PT10M"
+        },
+        "actions": [
+          {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+            "sendToServiceOwners": true,
+            "customEmails": []
+          },
+          {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleWebhookAction",
+            "serviceUri": "[parameters('alertWebhookUrl')]",
+            "properties": {}
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ]
+    },
+    {
+      "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId,'/resourcegroups/', resourceGroup().name, '/providers/microsoft.insights/alertrules/', variables('webAppAlertRulesCpuThresholdName'))]",
+      "type": "Microsoft.Insights/AlertRules",
+      "name": "[variables('webAppAlertRulesCpuThresholdName')]",
+      "apiVersion": "2014-04-01",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "[concat('hidden-related:', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlanName'))]": "Resource"
+      },
+      "scale": null,
+      "properties": {
+        "name": "[variables('webAppAlertRulesCpuThresholdName')]",
+        "description": "",
+        "isEnabled": true,
+        "condition": {
+          "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+          "dataSource": {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+            "resourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+            "metricNamespace": null,
+            "metricName": "CpuPercentage"
+          },
+          "operator": "GreaterThan",
+          "threshold": "[parameters('cpuThreshold')]",
+          "windowSize": "PT10M"
+        },
+        "actions": [
+          {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+            "sendToServiceOwners": true,
+            "customEmails": []
+          },
+          {
+            "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleWebhookAction",
+            "serviceUri": "[parameters('alertWebhookUrl')]",
+            "properties": {}
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ]
+    },
+    {
+      "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/microsoft.insights/autoscalesettings/', variables('appServicePlanAutoScaleSettingsName'))]",
+      "type": "microsoft.insights/autoscalesettings",
+      "name": "[variables('appServicePlanAutoScaleSettingsName')]",
+      "apiVersion": "2014-04-01",
+      "location": "[resourceGroup().location]",
+      "tags": {},
+      "scale": null,
+      "properties": {
+        "profiles": [
+          {
+            "name": "Auto created scale condition",
+            "capacity": {
+              "minimum": "[parameters('appServicePlan').autoScale.minimumCapacity]",
+              "maximum": "[parameters('appServicePlan').autoScale.maximumCapacity]",
+              "default": "[parameters('appServicePlan').autoScale.defaultCapacity]"
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                  "timeGrain": "PT5M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[int(parameters('appServicePlan').autoScale.cpuPercentThresholdToScaleOut)]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "PT10M"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                  "timeGrain": "PT5M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": "[int(parameters('appServicePlan').autoScale.cpuPercentThresholdToScaleIn)]"
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "PT10M"
+                }
+              }
+            ]
+          }
+        ],
+        "enabled": "[equals(parameters('appServicePlan').autoScale.enabled, bool('True'))]",
+        "name": "[variables('appServicePlanAutoScaleSettingsName')]",
+        "targetResourceUri": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceId": {
+      "value": "[resourceId('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]",
+      "type": "string"
+    }
+  }
+}

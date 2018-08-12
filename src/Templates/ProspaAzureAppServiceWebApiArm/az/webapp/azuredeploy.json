@@ -1,0 +1,376 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appServicePlanName": {
+      "type": "string"
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "demo",
+      "allowedValues": [
+        "demo",
+        "staging",
+        "live"
+      ],
+      "metadata": {
+        "description": "The name of the environment deploying to. The App Service Plan's name and Web App's name will be prefixed with this value. Resources will be tagged with this value."
+      }
+    },
+    "webApp": {
+      "type": "object",
+      "defaultValue": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "defaultValue": "api",
+          "type": "string"
+        },
+        "appInsights": {
+          "defaultValue": {
+            "enabled": {
+              "defaultValue": true,
+              "type": "bool",
+              "metadata": {
+                "description": "If enabled App Insights will be added for the Web App where the Web App's name is used as the ApplicationId."
+              }
+            },
+            "location": {
+              "defaultValue": "southeastasia",
+              "type": "string",
+              "allowedValues": [
+                "southeastasia",
+                "eastus",
+                "northeurope",
+                "southcentralus",
+                "westeurope",
+                "westus2"
+              ],
+              "metadata": {
+                "description": "The App Insights location of the Web App."
+              }
+            },
+            "metadata": {
+              "description": "Enables/disables configuring App Insights for this Web App. If enabled will be named using the Web App's name."
+            }
+          },
+          "type": "object"
+        },
+        "testSlot": {
+          "defaultValue": {
+            "enabled": true,
+            "name": "preview",
+            "metadata": {
+              "description": "Enables/disables configuring a web app deployment slot."
+            }
+          },
+          "type": "object"
+        },
+        "stickySlotConnectionStringNames": {
+          "defaultValue": [],
+          "type": "array"
+        },
+        "stickySlotAppSettingNames": {
+          "defaultValue": [],
+          "type": "array"
+        }
+      }
+    },
+    "connectionStrings": {
+        "type": "array",      
+        "defaultValue": [
+          {
+            "name": {
+              "type": "string"
+            },
+            "connectionString": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "allowedValues": [
+                "SQLAzure",
+                "SQLServer",
+                "MySQL",
+                "Custom"
+              ]
+            }
+        }
+      ]
+    }
+  },
+  "variables": {
+    "defaultAppSettings": [ "APPINSIGHTS_INSTRUMENTATIONKEY", "ASPNETCORE_ENVIRONMENT", "Azure:TenantId", "Azure:SubscriptionId", "Azure:ResourceGroup", "MetricsOptions:ReportingEnabled", "SlackHealthAlertOptions:Enabled" ],
+    "serverFarmId": "[concat(parameters('environment'), '-', parameters('appServicePlanName'))]",
+    "webAppName": "[toLower(concat(parameters('environment'), '-', parameters('webApp').name))]",
+    "domainName": ".azurewebsites.net",
+    "identityResourceId": "[concat(resourceId('Microsoft.Web/sites', variables('webAppName')), '/providers/Microsoft.ManagedIdentity/Identities/default')]",
+    "stickySlotAppSettingNames": "[if(empty(parameters('webApp').stickySlotAppSettingNames), variables('defaultAppSettings'), union(parameters('webApp').stickySlotAppSettingNames, variables('defaultAppSettings')))]"
+  },
+  "resources": [
+    {
+      "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('webAppName'))]",
+      "type": "Microsoft.Web/sites",
+      "kind": "[parameters('webApp').kind]",
+      "name": "[variables('webAppName')]",
+      "apiVersion": "2016-08-01",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "environment": "[parameters('environment')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "scale": null,
+      "properties": {
+        "enabled": true,
+        "hostNameSslStates": [
+          {
+            "name": "[concat(variables('webAppName'),'.azurewebsites.net')]",
+            "sslState": "Disabled",
+            "virtualIP": null,
+            "thumbprint": null,
+            "toUpdate": null,
+            "hostType": "Standard"
+          },
+          {
+            "name": "[concat(variables('webAppName'),'.scm.azurewebsites.net')]",
+            "sslState": "Disabled",
+            "virtualIP": null,
+            "thumbprint": null,
+            "toUpdate": null,
+            "hostType": "Repository"
+          }
+        ],
+        "serverFarmId": "[variables('serverFarmId')]",
+        "reserved": false,
+        "siteConfig": {
+          "connectionStrings": "[if(empty(parameters('connectionStrings')), 'null', parameters('connectionStrings'))]"
+        },
+        "scmSiteAlsoStopped": false,
+        "hostingEnvironmentProfile": null,
+        "clientAffinityEnabled": false,
+        "clientCertEnabled": false,
+        "hostNamesDisabled": false,
+        "containerSize": 0,
+        "dailyMemoryTimeQuota": 0,
+        "cloningInfo": null
+      },
+      "dependsOn": [],
+      "resources": [
+        {
+          "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('webAppName'), '/config/web')]",
+          "type": "Microsoft.Web/sites/config",
+          "name": "[concat(variables('webAppName'), '/web')]",
+          "apiVersion": "2016-08-01",
+          "location": "[resourceGroup().location]",
+          "scale": null,
+          "properties": {
+            "numberOfWorkers": 1,
+            "defaultDocuments": [
+              "Default.htm",
+              "Default.html",
+              "Default.asp",
+              "index.htm",
+              "index.html",
+              "iisstart.htm",
+              "default.aspx",
+              "index.php",
+              "hostingstart.html"
+            ],
+            "netFrameworkVersion": "v4.0",
+            "phpVersion": "",
+            "pythonVersion": "",
+            "nodeVersion": "",
+            "linuxFxVersion": "",
+            "requestTracingEnabled": true,
+            "requestTracingExpirationTime": "9999-12-31T23:59:00Z",
+            "remoteDebuggingEnabled": false,
+            "remoteDebuggingVersion": "VS2012",
+            "httpLoggingEnabled": true,
+            "logsDirectorySizeLimit": 35,
+            "detailedErrorLoggingEnabled": false,
+            "appSettings": null,
+            "metadata": null,
+            "connectionStrings": null,
+            "machineKey": null,
+            "handlerMappings": null,
+            "documentRoot": null,
+            "scmType": "None",
+            "use32BitWorkerProcess": false,
+            "webSocketsEnabled": true,
+            "alwaysOn": true,
+            "javaVersion": null,
+            "javaContainer": null,
+            "javaContainerVersion": null,
+            "appCommandLine": "",
+            "managedPipelineMode": "Integrated",
+            "virtualApplications": [
+              {
+                "virtualPath": "/",
+                "physicalPath": "site\\wwwroot",
+                "preloadEnabled": true,
+                "virtualDirectories": null
+              }
+            ],
+            "winAuthAdminState": 0,
+            "winAuthTenantState": 0,
+            "customAppPoolIdentityAdminState": false,
+            "customAppPoolIdentityTenantState": false,
+            "runtimeADUser": null,
+            "runtimeADUserPassword": null,
+            "loadBalancing": "LeastRequests",
+            "routingRules": [],
+            "experiments": {
+              "rampUpRules": []
+            },
+            "limits": null,
+            "autoHealEnabled": false,
+            "autoHealRules": null,
+            "tracingOptions": null,
+            "vnetName": "",
+            "siteAuthEnabled": false,
+            "siteAuthSettings": {
+              "enabled": null,
+              "unauthenticatedClientAction": null,
+              "tokenStoreEnabled": null,
+              "allowedExternalRedirectUrls": null,
+              "defaultProvider": null,
+              "clientId": null,
+              "clientSecret": null,
+              "issuer": null,
+              "allowedAudiences": null,
+              "additionalLoginParams": null,
+              "isAadAutoProvisioned": false,
+              "googleClientId": null,
+              "googleClientSecret": null,
+              "googleOAuthScopes": null,
+              "facebookAppId": null,
+              "facebookAppSecret": null,
+              "facebookOAuthScopes": null,
+              "twitterConsumerKey": null,
+              "twitterConsumerSecret": null,
+              "microsoftAccountClientId": null,
+              "microsoftAccountClientSecret": null,
+              "microsoftAccountOAuthScopes": null
+            },
+            "cors": {
+              "allowedOrigins": [
+                "*"
+              ]
+            },
+            "push": null,
+            "apiDefinition": {
+              "url": "[concat('https://', variables('webAppName'), variables('domainName'), '/swagger/docs/v1')]"
+            },
+            "autoSwapSlotName": null,
+            "localMySqlEnabled": false,
+            "ipSecurityRestrictions": null
+          },
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+          ]
+        },
+        {
+          "comments": "[concat('Generalized from resource: ', '/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('webAppName'), '/hostNameBindings/', variables('webAppName'), variables('domainName'))]",
+          "type": "Microsoft.Web/sites/hostNameBindings",
+          "name": "[concat(variables('webAppName'), '/', variables('webAppName'), variables('domainName'))]",
+          "apiVersion": "2016-08-01",
+          "location": "[resourceGroup().location]",
+          "scale": null,
+          "properties": {
+            "siteName": "[variables('webAppName')]",
+            "domainId": null,
+            "hostNameType": "Verified"
+          },
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', variables('webAppName'))]"
+          ]
+        },
+        {
+          "apiVersion": "2015-08-01",
+          "name": "slotconfignames",
+          "type": "config",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/Sites', variables('webAppName'))]"
+          ],
+          "properties": {
+            "connectionStringNames": "[if(empty(parameters('webApp').stickySlotConnectionStringNames), 'null', parameters('webApp').stickySlotConnectionStringNames)]",
+            "appSettingNames": "[if(empty(variables('stickySlotAppSettingNames')), 'null', variables('stickySlotAppSettingNames'))]"
+          }
+        },
+        {
+          "apiVersion": "2016-08-01",
+          "name": "[concat(parameters('webApp').testSlot.name)]",
+          "type": "slots",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[concat('Microsoft.Web/sites/', variables('webAppName'))]"
+          ],
+          "properties": {},
+          "tags": {
+            "environment": "[parameters('environment')]"
+          },
+          "resources": [{
+            "apiVersion": "2015-08-01",
+            "name": "appsettings",
+            "type": "config",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/Sites/Slots', variables('webAppName'), parameters('webApp').testSlot.name)]"
+            ],
+            "properties": {
+              "APPINSIGHTS_INSTRUMENTATIONKEY": "[if(equals(parameters('webApp').appInsights.enabled, bool('True')), reference(concat('Microsoft.Insights/components/', variables('webAppName'))).InstrumentationKey, '')]",
+              "ASPNETCORE_ENVIRONMENT": "[if(equals(parameters('environment'), 'live'), 'Production', if(equals(parameters('environment'), 'staging'), 'Staging', 'Development'))]",
+              "Azure:SubscriptionId": "[subscription().subscriptionId]",
+              "Azure:TenantId": "[subscription().tenantId]",
+              "Azure:ResourceGroup": "[resourceGroup().name]",
+              "MetricsOptions:ReportingEnabled": false,
+              "SlackHealthAlertOptions:Enabled": false
+            }
+          }],
+          "condition": "[equals(parameters('webApp').testSlot.enabled, bool('True'))]"
+        },
+        {
+          "apiVersion": "2015-08-01",
+          "name": "appsettings",
+          "type": "config",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites/', variables('webAppName'))]",
+            "[resourceId('Microsoft.Insights/components', variables('webAppName'))]"
+          ],
+          "properties": {
+            "APPINSIGHTS_INSTRUMENTATIONKEY": "[if(equals(parameters('webApp').appInsights.enabled, bool('True')), reference(concat('Microsoft.Insights/components/', variables('webAppName'))).InstrumentationKey, '')]",
+            "ASPNETCORE_ENVIRONMENT": "[if(equals(parameters('environment'), 'live'), 'Production', if(equals(parameters('environment'), 'staging'), 'Staging', 'Development'))]",
+            "Azure:SubscriptionId": "[subscription().subscriptionId]",
+            "Azure:TenantId": "[subscription().tenantId]",
+            "Azure:ResourceGroup": "[resourceGroup().name]"
+          }          
+        }      
+      ]
+    },
+    {
+      "apiVersion": "2014-04-01",
+      "name": "[variables('webAppName')]",
+      "type": "Microsoft.Insights/components",
+      "location": "[parameters('webApp').appInsights.location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites/', variables('webAppName'))]"
+      ],
+      "tags": {
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.Web/sites/', variables('webAppName'))]": "Resource",
+        "displayName": "AppInsightsComponent"
+      },
+      "properties": {
+        "applicationId": "[variables('webAppName')]"
+      },
+      "condition": "[equals(parameters('webApp').appInsights.enabled, bool('True'))]"
+    }
+  ],
+  "outputs": {
+    "principalId": {
+        "type": "string",
+        "value": "[reference(variables('identityResourceId'), '2015-08-31-PREVIEW').principalId]"      
+      }
+  }
+}

@@ -1,0 +1,27 @@
+﻿{
+  "author": "Prospa Engineering",
+  "classifications": [
+    "Prospa",
+    "AspNetCore",
+    "API"
+  ],
+  "name": "Prospa Azure App Service Web API ARM template",
+  "groupIdentity": "prospa",
+  "identity": "Prospa.AzureAppServiceWebApi.ARM",
+  "shortName": "prospaapi",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "preferNameDirectory": true,
+  "sourceName": "ProspaAzureAppServiceWebApiArm",
+  "symbols": {
+    "keyvaultName": {
+      "type": "parameter",
+      "replaces": "(keyvaultName)",
+      "description": "Keyvault name is required, don't include the environment prefix or use the DNS name. e.g. template-keyvault",
+      "dataType": "string",
+      "isRequired": true
+    }
+  }
+}
